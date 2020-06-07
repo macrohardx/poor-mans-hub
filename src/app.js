@@ -21,4 +21,6 @@ module.exports.startApp = async () => {
     app.listen(config.port, () => {
         console.log(`::::${config.service_name}:::: listening to ${config.service_url}:${config.port}`)
     })
+
+    return app
 }

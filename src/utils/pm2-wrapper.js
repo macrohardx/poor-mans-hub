@@ -1,4 +1,4 @@
-const { map, get, isFunction } = require('lodash')
+const { map, get, getOr, isFunction } = require('lodash/fp')
 const pm2 = require('pm2')
 
 /**
@@ -7,11 +7,11 @@ const pm2 = require('pm2')
  * @returns {Promise<any>}
  */
 const pm2_start_process = (options) => {
-    return pm2_connect_cb_disconnect((resolve, reject) => {
-        pm2.start(options, (err, proc) => {
-            return err ? reject(err) : resolve(simplifyPm2Describe(proc))
-        })
-    })
+    return pm2_connect_cb_disconnect((resolve) =>
+        pm2.start(options, (error, proc) => 
+            error ? resolve({ ok: false, error }) : resolve(simplifyPm2Describe({ ok: true, value: proc }))
+        )
+    )
 }
 
 /**
@@ -52,22 +52,22 @@ const pm2_list = () => {
  * @returns {any[]}
  */
 const simplifyPm2Describe = (description) => {
-    return map(description, (d) => {
+    return map((d) => {
         return {
-            status: get(d, 'pm2_env.status'),
-            pid: get(d, 'pid'),
-            name: get(d, 'name'),
-            version: get(d, 'pm2_env.version'),
-            pm_id: get(d, 'pm_id'),
-            created_at: new Date(get(d, 'pm2_env.created_at')),
-            pm_uptime: (new Date()).getTime() - (get(d, 'pm2_env.created_at') || 0),
-            namespace: get(d, 'pm2_env.namespace'),
-            autorestart: get(d, 'pm2_env.autorestart'),
-            watch: get(d, 'pm2_env.watch'),
-            memory: (get(d, 'monit.memory') || 0) / 1000000.0,
-            cpu: get(d, 'monit.cpu')
+            status     : get('pm2_env.status', d),
+            pid        : get('pid', d),
+            name       : get('name', d),
+            version    : get('pm2_env.version', d),
+            pm_id      : get(d, 'pm_id', d),
+            created_at : new Date(get('pm2_env.created_at', d)),
+            pm_uptime  : (new Date()).getTime() - (get('pm2_env.created_at', d) || 0),
+            namespace  : get('pm2_env.namespace', d),
+            autorestart: get('pm2_env.autorestart', d),
+            watch      : get('pm2_env.watch', d),
+            memory     : (get('monit.memory', d) || 0) / 1000000.0,
+            cpu        : get('monit.cpu', d)
         }
-    })
+    }, description)
 }
 
 /**

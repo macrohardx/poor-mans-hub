@@ -47,24 +47,23 @@ router.post('/kill', async (req, res) => {
     res.sendStatus(HttpStatus.OK)
 })
 
-const git = require('simple-git/promise')
-const npm = require('npm')
-router.post('faz', async (req, res) => {
-    const serverPath = `D:\\Git\\macrohard\\clone_here` //TODO: Do Something about it
-    git().clone('', serverPath)
+// const git = require('simple-git/promise')
+// router.post('faz', async (req, res) => {
+//     const serverPath = `D:\\Git\\macrohard\\clone_here` //TODO: Do Something about it
+//     git().clone('', serverPath)
 
 
-    // 1- clone repo inside publish folder
+//     // 1- clone repo inside publish folder
 
-    // 2- install dependencies
+//     // 2- install dependencies
 
-    // 2.1- run tests ? (CI)
+//     // 2.1- run tests ? (CI)
 
-    // 3- get main file from package.json
+//     // 3- get main file from package.json
 
-    // 4- add main file to reference table
+//     // 4- add main file to reference table
 
-    // 5- start process with pm2 (optional)
-})
+//     // 5- start process with pm2 (optional)
+// })
 
 module.exports = router
