@@ -47,23 +47,16 @@ router.post('/kill', async (req, res) => {
     res.sendStatus(HttpStatus.OK)
 })
 
-// const git = require('simple-git/promise')
-// router.post('faz', async (req, res) => {
-//     const serverPath = `D:\\Git\\macrohard\\clone_here` //TODO: Do Something about it
-//     git().clone('', serverPath)
+const { defaultPublishProject } = require('../utils/repo-helpers')
+const EventEmitter = require('events')
+router.post('faz', async (req, res) => {
+    const repoPath = 'https://github.com/lndr27/empty-node.git'
+    const localPath = 'C:\\users\\lndr2\\desktop\\zzz'
+    const myEmitter = new EventEmitter()
+    defaultPublishProject(repoPath, localPath, myEmitter)
+    .then(x => res.sendStatus(HttpStatus.OK))
+    .catch(x => res.status(HttpStatus.INTERNAL_SERVER_ERROR).send({ error: x }))
 
-
-//     // 1- clone repo inside publish folder
-
-//     // 2- install dependencies
-
-//     // 2.1- run tests ? (CI)
-
-//     // 3- get main file from package.json
-
-//     // 4- add main file to reference table
-
-//     // 5- start process with pm2 (optional)
-// })
+})
 
 module.exports = router

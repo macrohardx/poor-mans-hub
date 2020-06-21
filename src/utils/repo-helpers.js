@@ -1,37 +1,25 @@
-const EventEmitter = require('events')
-const { contains } = require('lodash/fp')
+const { curry } = require('lodash/fp')
+const { safeReportProgress } = require('./progress-reporter')
+const { safeRemoveFolder, safeCreateDirectory, verifyIfFileExists } = require('./fs-safe')
 
 /**
  * Publishes a project
- * @param {Object} gitModule 
- * @param {Object} fsModule 
- * @param {Object} childProcessModule 
- * @param {Object} pathModule 
+ * @param {SimpleGit} gitModule 
+ * @param {fs} fsModule 
+ * @param {childProcess} childProcessModule 
+ * @param {path} pathModule 
  * @param {String} repositoryPath 
  * @param {String} publishPath
  * @param {EventEmitter} progressReporter
  * @returns {Promise<void>}
  */
-const publishProject = (gitModule, fsModule, removeFolder, childProcessModule, pathModule, repositoryPath, publishPath, progressReporter) =>
+const publishProject = curry((gitModule, fsModule, removeFolder, childProcessModule, pathModule, repositoryPath, publishPath, progressReporter) =>
     safeRemoveFolder(removeFolder, publishPath)
         .then(() => safeReportProgress(progressReporter, 'progress', `Directory '${publishPath}' cleaned\nCloning repository...`))
         .then(() => cloneToDestination(gitModule, fsModule, repositoryPath, publishPath, progressReporter))
         .then(() => safeReportProgress(progressReporter, 'progress', `${repositoryPath} cloned to ${publishPath}\nInstalling dependencies...`))
         .then(() => installProjectDependencies(childProcessModule, fsModule, pathModule, publishPath, progressReporter))
-        .then(() => safeReportProgress(progressReporter, 'progress', `Dependencies installed`))
-
-
-/**
- * Safely deletes a folder an all it's contents. 'Promisified' version of rmdir that doesn't throw
- * @param {Object} fsModule 
- * @param {String} pathToRemove 
- * @returns {Promise<void>}
- */
-const safeRemoveFolder = (removeFolder, pathToRemove) =>
-    new Promise((success, failure) =>
-        removeFolder(pathToRemove, (err) =>
-            err ? failure(new Error(err))
-                : success(true)))
+        .then(() => safeReportProgress(progressReporter, 'progress', `Dependencies installed`)))
 
 /**
  * Clones a remote repository into a destination folder
@@ -46,18 +34,6 @@ const cloneToDestination = (gitModule, fsModule, repositoryPath, publishPath) =>
         .then(() => gitModule.clone(repositoryPath, publishPath))
 
 /**
- * Safely creates a directory. 'Promisified' version of mkdir that doesn't throw
- * @param {Object} fsModule 
- * @param {String} pathToCreate 
- * @returns {Promise<void>}
- */
-const safeCreateDirectory = (fsModule, pathToCreate) =>
-    new Promise((success, fail) =>
-        fsModule.mkdir(pathToCreate, (err) =>
-            err ? fail(new Error(err))
-                : success(true)))
-
-/**
  * Install npm dependencies of a project, creating node_module folder if it doesn't exist
  * @param {Object} childProcessModule 
  * @param {Object} fsModule 
@@ -66,72 +42,66 @@ const safeCreateDirectory = (fsModule, pathToCreate) =>
  * @returns {Promise<void>} 
  */
 const installProjectDependencies = (childProcessModule, fsModule, pathModule, pathToProject) =>
-    // node_modules folder needs to be created beforehand or npm might search for a module folder higher up in hierarchy 
-    safeCreateDirectory(fsModule, pathModule.join(pathToProject, 'node_modules'))
-        .then(() => npmInstall(childProcessModule, pathToProject))
+    isNodeProject(fsModule, pathModule, pathToProject)
+        .then((isNodeProject) =>
+            isNodeProject ? installNodeModules(childProcessModule, fsModule, pathModule, pathToProject)
+                : Promise.resolve(true))
 
-// TODO Verify if project is node and has package.json       
+/**
+ * Verifies if a path contains a package.json indicating that it's a npm project
+ * @param {fs} fsModule 
+ * @param {path} pathModule 
+ * @param {String} pathToProject 
+ * @returns {Promise<Boolean>}
+ */
+const isNodeProject = (fsModule, pathModule, pathToProject) =>
+    verifyIfFileExists(fsModule, pathModule.join(pathToProject, 'package.json'))
+
+/**
+ * Installs node modules
+ * @param {*} childProcessModule 
+ * @param {*} fsModule 
+ * @param {*} pathModule 
+ * @param {*} pathToProject 
+ * @returns {Promise<void>}
+ */
+const installNodeModules = (childProcessModule, fsModule, pathModule, pathToProject) =>
+    // node_modules folder needs to be created beforehand or npm might search for a module folder higher up in hierarchy
+    safeCreateDirectory(fsModule, pathModule.join(pathToProject, 'node_modules'))
+        .then(() => execNpmInstall(childProcessModule, pathToProject))
+
 /**
  * Installs npm packages of a project
  * @param {Object | fs} childProcessModule 
  * @param {String} pathToProject 
  * @returns {Promise<void>}
  */
-const npmInstall = (childProcessModule, pathToProject) =>
+const execNpmInstall = (childProcessModule, pathToProject) =>
     new Promise((success, fail) =>
         childProcessModule.exec(`npm install`, { shell: true, cwd: pathToProject }, (err) =>
             err ? fail(new Error(err))
                 : success(true)))
 
-// Move to it's own file
-const safeReportProgress = (progressReporter, type, msg) =>
-    Promise.resolve(
-        progressReporterIsEventEmitter(progressReporter) &&
-        isValidProgressType(type) &&
-        reportProgress(progressReporter, type, msg))
-
-const isValidProgressType = (type) =>
-    contains(type, ['progress', 'error'])
-
-const reportProgress = (progressReporter, type, msg) =>
-    progressReporter.emit(type, msg) || true
-
-const progressReporterIsEventEmitter = (progressReporter) =>
-    progressReporter instanceof EventEmitter
+const fs = require('fs')
+const git = require('simple-git/promise')()
+const child = require('child_process')
+const path = require('path')
+const rimraf = require('rimraf')
 
 
-// Testing    
-// const fs = require('fs')
-// const git = require('simple-git/promise')()
-// const child = require('child_process')
-// const path = require('path')
-// const rimraf = require('rimraf')
-// const foo = () => {
-//     const repoPath = 'https://github.com/lndr27/empty-node.git'
-//     const localPath = 'C:\\users\\lndr2\\desktop\\aqui'
-
-//     //npmInstall(child, 'C:\\users\\lndr2\\desktop\\zz')
-
-//     var e = new EventEmitter()
-//     publishProject(git, fs, rimraf, child, path, repoPath, localPath, e)
-//     .then(a => console.log('done'))
-//     .catch(err => console.log('uhoh something went wrong... ', err))
-//     e.on('progress', (msg) => {
-//         console.log(msg)
-//     })
-
-
-// }
-// foo()
+const defaultPublishProject = publishProject(git, fs, rimraf, child, path)
 
 module.exports = {
+    defaultPublishProject,
+    publishProject,
     cloneToDestination,
     installProjectDependencies,
-    npmInstall,
-    safeCreateDirectory,
-    safeRemoveFolder,
-    publishProject
+    isNodeProject,
+    installNodeModules,
+    execNpmInstall
 }
+
+
 // 1- clone repo inside publish folder
 
 // 2- install dependencies
